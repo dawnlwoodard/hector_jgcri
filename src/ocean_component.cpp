@@ -150,6 +150,7 @@ void OceanComponent::setData( const string& varName,
             spinup_chem = (data.getUnitval(U_UNDEFINED) > 0);
         } else if( varName == D_ATM_OCEAN_CONSTRAIN ) {
             H_ASSERT( data.date != Core::undefinedIndex(), "date required" );
+            oceanflux_constrain.set(data.date, data.getUnitval(U_PGC_YR));
         } else {
             H_THROW( "Unknown variable name while parsing " + getComponentName() + ": "
                     + varName );
