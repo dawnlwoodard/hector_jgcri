@@ -309,31 +309,13 @@ void TemperatureComponent::prepareToRun() throw ( h_exception ) {
 void TemperatureComponent::run( const double runToDate ) throw ( h_exception ) {
     H_LOG( logger, Logger::DEBUG ) << "temperature run " << runToDate << std::endl;
 
-    // Commented section below is for case of user-specified temperature record.
-    // Temperature component can't handle that at the moment!
-
-    //// We track total radiative forcing using internal variable `internal_Ftot`
-    //// Need to do this because if we're subject to a user constraint (being forced
-    //// to match a temperature record), need to track the Ftot that *would* have
-    //// produced the observed temperature record. This way there's a smooth
-    //// transition when we exit the constraint period, after which internal_Ftot
-    //// will rise in parallel with the value reported by ForcingComponent.
-
-    // If we never had any temperature constraint, `internal_Ftot` will match `Ftot`.
-    //
-    // If the user has supplied temperature data, use that (except if past its end)
-    if( tgav_constrain.size() && runToDate <= tgav_constrain.lastdate() ) {
-    //    H_LOG( logger, Logger::NOTICE ) << "** Using user-supplied temperature" << std::endl;
-        H_LOG( logger, Logger::SEVERE ) << "** ERROR - Temperature can't currently handle user-supplied temperature" << std::endl;
-        H_THROW("User-supplied temperature not yet implemented.")
-    }
-
     // Some needed inputs
     int tstep = runToDate - core->getStartDate();
     double aero_forcing =
         double(core->sendMessage( M_GETDATA, D_RF_BC ).value( U_W_M2 )) + double(core->sendMessage( M_GETDATA, D_RF_OC).value( U_W_M2 )) +
         double(core->sendMessage( M_GETDATA, D_RF_SO2d ).value( U_W_M2 )) + double(core->sendMessage( M_GETDATA, D_RF_SO2i ).value( U_W_M2 ));
     double volcanic_forcing = double(core->sendMessage(M_GETDATA, D_RF_VOL));
+
 
     forcing[tstep] = double(core->sendMessage(M_GETDATA, D_RF_TOTAL).value(U_W_M2))
                       - (1.0 - alpha) * aero_forcing
@@ -401,8 +383,34 @@ void TemperatureComponent::run( const double runToDate ) throw ( h_exception ) {
         temp_landair[0] = 0.0;
         temp_sst[0] = 0.0;
     }
-    temp[tstep] = flnd * temp_landair[tstep] + (1.0 - flnd) * bsi * temp_sst[tstep];
+    // Commented section below is for case of user-specified temperature record.
+    // Temperature component can't handle that at the moment!
 
+    //// We track total radiative forcing using internal variable `internal_Ftot`
+    //// Need to do this because if we're subject to a user constraint (being forced
+    //// to match a temperature record), need to track the Ftot that *would* have
+    //// produced the observed temperature record. This way there's a smooth
+    //// transition when we exit the constraint period, after which internal_Ftot
+    //// will rise in parallel with the value reported by ForcingComponent.
+
+    // If we never had any temperature constraint, `internal_Ftot` will match `Ftot`.
+    //
+    // If the user has supplied temperature data, use that (except if past its end)
+    if( tgav_constrain.size() && runToDate <= tgav_constrain.lastdate() ) {
+        H_LOG( logger, Logger::NOTICE ) << "** Using user-supplied temperature" << std::endl;
+        //H_LOG( logger, Logger::SEVERE ) << "** ERROR - Temperature can't currently handle user-supplied temperature" << std::endl;
+        //H_THROW("User-supplied temperature not yet implemented.");
+        temp[tstep] = tgav_constrain.get( runToDate );
+        temp_sst[tstep] = temp[tstep]/(flnd*1.591 + (1-flnd));
+        temp_landair[tstep] = 1.591*temp_sst[tstep];
+        //how to handle temp_landair and temp_sst?
+    } 
+    
+    else {
+        temp[tstep] = flnd * temp_landair[tstep] + (1.0 - flnd) * bsi * temp_sst[tstep];
+        // should put temp_landair and temp_sst calcs in here
+
+    }
     // Calculate ocean heat uptake [W/m^2]
     // heatflux[tstep] captures in the heat flux in the period between tstep-1 and tstep.
     // Numerical implementation of Equation 2.7, EK05, or Equation 2.3.13, TK07)
